@@ -1,0 +1,25 @@
+{% extends "./_base.html" %}
+{% block content %}
+
+    {% load static %}
+    <div class=content>
+        <h1>あなたにおすすめのクレジットカードは？</h1>
+    {% if first_question %}    
+        <a href="{% url 'polls:detail' first_question.id %}"><div class=button>スタート</div></a>
+    {% endif %}
+
+{% comment ’以下の行をコメントアウト’ %}
+    {% if latest_question_list %}
+        <ul>
+        {% for question in latest_question_list %}
+            <li><a href="{% url 'polls:detail' question.id %}">{{ question.question_text }}</a></li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p>No polls are available.</p>
+    {% endif %}
+{% endcomment %}
+    
+    </div>
+
+{% endblock %}
