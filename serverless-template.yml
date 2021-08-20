@@ -1,0 +1,93 @@
+service: hello-world
+
+provider:
+  name: aws
+  region: ap-northeast-1
+
+custom:
+  accountID: 123456789012
+  repositoryName: hello-world
+  imageHash: sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+  fsapID: fsap-xxxxxxxxxxxxxxxxx
+  bucketName: hello-world-staticfiles
+  s3Sync:
+    - bucketName: ${self:custom.bucketName}
+      localDir: app/polls/static
+
+functions:
+  someFunction:
+    image: ${self:custom.accountID}.dkr.ecr.ap-northeast-1.amazonaws.com/${self:custom.repositoryName}@${self:custom.imageHash}
+    events:
+      - httpApi:
+          path: /
+          method: '*'
+      - httpApi:
+          path: /{proxy+}
+          method: '*'
+    fileSystemConfig:
+      localMountPath: /mnt/efs
+      arn: arn:aws:elasticfilesystem:ap-northeast-1:${self:custom.accountID}:access-point/${self:custom.fsapID}
+    vpc:
+      securityGroupIds:
+        - sg-xxxxxxxxxxxxxxxxx
+      subnetIds:
+        - subnet-xxxxxxxxxxxxxxxxx
+        - subnet-yyyyyyyyyyyyyyyyy
+        - subnet-zzzzzzzzzzzzzzzzz
+
+
+resources:
+  Resources:
+    HttpApiIntegrationHttpProxy:
+      Type: AWS::ApiGatewayV2::Integration
+      Properties: 
+        ApiId: !Ref HttpApi
+        Description: HTTP proxy integration
+        IntegrationType: HTTP_PROXY
+        IntegrationMethod: GET
+        IntegrationUri: 'http://${self:custom.bucketName}.s3-website-ap-northeast-1.amazonaws.com/{proxy}'
+        PayloadFormatVersion: "1.0"
+#        RequestParameters:
+#          'integration.request.path.proxy': 'method.request.path.proxy'
+    HttpApiRouteAnyStaticProxyVar:
+      Type: AWS::ApiGatewayV2::Route
+      Properties:
+        ApiId: !Ref HttpApi
+        RouteKey: "ANY /static/{proxy+}"
+        Target: !Join
+          - /
+          - - integrations
+            - !Ref HttpApiIntegrationHttpProxy
+    StaticSite:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.bucketName}
+        AccessControl: PublicRead
+        CorsConfiguration:
+          CorsRules:
+            - AllowedOrigins:
+                - '*'
+              AllowedMethods:
+                - GET
+              AllowedHeaders:
+                - '*'
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: error.html
+    StaticSiteS3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: StaticSite
+        PolicyDocument:
+          Statement:
+            - Sid: PublicReadGetObject
+              Effect: Allow
+              Principal: "*"
+              Action:
+              - s3:GetObject
+              Resource:
+                Fn::Join: ["", ["arn:aws:s3:::",{"Ref": "StaticSite"},"/*"]]
+
+plugins:
+  - serverless-s3-sync
